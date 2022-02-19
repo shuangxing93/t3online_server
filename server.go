@@ -18,8 +18,8 @@ type Player struct {
 }
 
 // var Channel1test chan bool
-var Players []Player
-var Upgrader = websocket.Upgrader{
+var players []Player
+var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
@@ -40,21 +40,27 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 }
 
 // wrapper function to pass in channel, to allow communication between http and ws
-func FindGameWrap(logger chan string) func(http.ResponseWriter, *http.Request) {
+func findGameWrap(logger chan string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		//sends message to channel logger when this endpoint is hit
 		logger <- "Received request from /findgame"
-		io.WriteString(w, "Hello! You are finding game")
+	}
+}
+
+func loginWrap() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		dummyResponse := `{"userId":"1"}`
+		io.WriteString(w, dummyResponse)
 	}
 }
 
 // wrapper function to pass in channel, to allow communication between http and ws
-func WebSocketWrap(logger chan string) func(http.ResponseWriter, *http.Request) {
+func webSocketWrap(logger chan string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		//here we add a check to determine whether an incoming request is allowed to connect or not
 		//return true > always allow for now
-		Upgrader.CheckOrigin = func(r *http.Request) bool { return true }
-		ws, err := Upgrader.Upgrade(w, r, nil)
+		upgrader.CheckOrigin = func(r *http.Request) bool { return true }
+		ws, err := upgrader.Upgrade(w, r, nil)
 
 		if err != nil {
 			log.Println(err.Error())
@@ -67,24 +73,26 @@ func WebSocketWrap(logger chan string) func(http.ResponseWriter, *http.Request) 
 			return
 		}
 		// Sends 1 JSON message upon successful connection
-		Players = createDummyJSON()
-		jerr := ws.WriteJSON(Players)
+		players = createDummyJSON()
+		jerr := ws.WriteJSON(players)
 		if jerr != nil {
 			log.Println(jerr)
 			return
 		}
 		// Waits for message on logger channel. When message is available send it over to client
 		// logger will receive message when http endpoint /findgame is called
-		err = ws.WriteMessage(1, []byte(<-logger))
-		if err != nil {
-			log.Println(err)
-			return
+		for msg := range logger {
+			err = ws.WriteMessage(1, []byte(msg))
+			if err != nil {
+				log.Println(err)
+				return
+			}
 		}
 
-		Readws(ws)
+		readWs(ws)
 	}
 }
-func Readws(w *websocket.Conn) {
+func readWs(w *websocket.Conn) {
 	for {
 		_, p, err := w.ReadMessage()
 		if err != nil {
@@ -98,25 +106,26 @@ func Readws(w *websocket.Conn) {
 }
 
 func createDummyJSON() []Player {
-	Players = []Player{
+	players = []Player{
 		{Id: "1", Name: "Adam", Searching: "No", IsNoob: "Yes"},
 		{Id: "2", Name: "Steve", Searching: "Yes", IsNoob: "Yes"},
 	}
-	return Players
+	return players
 }
 
 func main() {
 
 	fmt.Println("t3online_server v 0.1")
 
-	FindGameChannel := make(chan string)
-	FindGameRequest := FindGameWrap(FindGameChannel)
-	WebSocketConn := WebSocketWrap(FindGameChannel)
+	findGameChannel := make(chan string)
+	findGameRequest := findGameWrap(findGameChannel)
+	webSocketConn := webSocketWrap(findGameChannel)
 
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", homepage)
-	myRouter.HandleFunc("/findgame", FindGameRequest)
-	myRouter.HandleFunc("/socket", WebSocketConn)
+	myRouter.HandleFunc("/socket", webSocketConn)
+	go myRouter.HandleFunc("/findGame", findGameRequest)
+	myRouter.HandleFunc("/login", loginWrap())
 
 	// myRouter := makeRoutes(handlewrap)
 	//Fatal is equivalent to Print() followed by a call to os.Exit(1).
