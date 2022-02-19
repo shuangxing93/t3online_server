@@ -12,15 +12,11 @@ Go is required to build this project. To install Go, refer to https://go.dev/doc
    ```
    git clone https://github.com/shuangxing93/t3online_server.git
    ```
-2. Install dependencies. Run the following code in the root folder of this project.
-   ```
-   go mod tidy
-   ```
-3. Build executables
+2. Build executables (Run the following code in the root folder of this project)
    ```
    go build
    ```
-4. Run the new binary file
+3. Run the new executable file
 #### For Linux
    ```sh
    ./tic3online_server
