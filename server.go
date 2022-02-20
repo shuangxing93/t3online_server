@@ -129,7 +129,7 @@ func main() {
 
 	// myRouter := makeRoutes(handlewrap)
 	//Fatal is equivalent to Print() followed by a call to os.Exit(1).
-	log.Fatal(http.ListenAndServe("192.168.1.216:8080", myRouter))
+	log.Fatal(http.ListenAndServe(":8080", myRouter))
 
 }
 
