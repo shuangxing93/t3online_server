@@ -6,19 +6,60 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
-type Player struct {
-	Id        string `json:"Id"`
-	Name      string `json:"Name"`
-	Searching string `json:"Searching"`
-	IsNoob    string `json:"IsNoob"`
+// ------------------from hub.go----------------------
+//
+//
+
+type Hub struct {
+	registerPlayer   chan *Player
+	unregisterPlayer chan *Player
+	currPlayers      map[*Player]bool
 }
 
+func NewHub() *Hub {
+	return &Hub{
+		registerPlayer:   make(chan *Player),
+		unregisterPlayer: make(chan *Player),
+		currPlayers:      make(map[*Player]bool),
+	}
+}
+
+//
+//------------------------from struct.go ------------------------------------
+//
+//
+
+type Player struct {
+	hub                 *Hub
+	webSocketConnection *websocket.Conn
+	send                chan SocketEventStruct
+	username            string
+	userID              string
+}
+
+type SocketEventStruct struct {
+	EventName    string      `json:"eventName"`
+	EventPayload interface{} `json:"eventPayload"`
+}
+
+//
+//
+// -----------------------------------------------------------------
+
+// type Player struct {
+// 	Id        string `json:"Id"`
+// 	Name      string `json:"Name"`
+// 	Searching string `json:"Searching"`
+// 	IsNoob    string `json:"IsNoob"`
+// }
+
 // var Channel1test chan bool
-var players []Player
+// var players []Player
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -54,6 +95,14 @@ func loginWrap() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// readPump pumps messages from the websocket connection to the hub.
+func (c *Player) readPump() {
+}
+
+// writePump pumps messages from the hub to the websocket connection.
+func (c *Player) writePump() {
+}
+
 // wrapper function to pass in channel, to allow communication between http and ws
 func webSocketWrap(logger chan string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +110,26 @@ func webSocketWrap(logger chan string) func(http.ResponseWriter, *http.Request) 
 		//return true > always allow for now
 		upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 		ws, err := upgrader.Upgrade(w, r, nil)
+
+		// Reading username from request parameter
+		username := mux.Vars(r)["username"]
+		hub := Hub{
+			registerPlayer:   make(chan *Player),
+			unregisterPlayer: make(chan *Player),
+			currPlayers:      make(map[*Player]bool),
+		}
+		//
+		uniqueID := uuid.New()
+		player := &Player{
+			hub:                 &hub,
+			webSocketConnection: ws,
+			send:                make(chan SocketEventStruct),
+			username:            username,
+			userID:              uniqueID.String(),
+		}
+
+		go player.readPump()
+		go player.writePump()
 
 		if err != nil {
 			log.Println(err.Error())
@@ -73,12 +142,12 @@ func webSocketWrap(logger chan string) func(http.ResponseWriter, *http.Request) 
 			return
 		}
 		// Sends 1 JSON message upon successful connection
-		players = createDummyJSON()
-		jerr := ws.WriteJSON(players)
-		if jerr != nil {
-			log.Println(jerr)
-			return
-		}
+		// players = createDummyJSON()
+		// jerr := ws.WriteJSON(players)
+		// if jerr != nil {
+		// 	log.Println(jerr)
+		// 	return
+		// }
 		// Waits for message on logger channel. When message is available send it over to client
 		// logger will receive message when http endpoint /findgame is called
 		for msg := range logger {
@@ -105,13 +174,13 @@ func readWs(w *websocket.Conn) {
 
 }
 
-func createDummyJSON() []Player {
-	players = []Player{
-		{Id: "1", Name: "Adam", Searching: "No", IsNoob: "Yes"},
-		{Id: "2", Name: "Steve", Searching: "Yes", IsNoob: "Yes"},
-	}
-	return players
-}
+// func createDummyJSON() []Player {
+// 	players = []Player{
+// 		{Id: "1", Name: "Adam", Searching: "No", IsNoob: "Yes"},
+// 		{Id: "2", Name: "Steve", Searching: "Yes", IsNoob: "Yes"},
+// 	}
+// 	return players
+// }
 
 func main() {
 
@@ -123,8 +192,8 @@ func main() {
 
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", homepage)
-	myRouter.HandleFunc("/socket", webSocketConn)
-	go myRouter.HandleFunc("/findGame", findGameRequest)
+	myRouter.HandleFunc("/socket/{username}", webSocketConn)
+	myRouter.HandleFunc("/findGame", findGameRequest)
 	myRouter.HandleFunc("/login", loginWrap())
 
 	// myRouter := makeRoutes(handlewrap)
