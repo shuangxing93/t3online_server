@@ -1,5 +1,7 @@
 # t3online_server
-Tic tac toe websocket server using golang
+Tic tac toe backend server using golang. 
+
+To run the entire app, run this server alongside front end GUI at https://github.com/benedictkao/t3online
 
 ## Prerequisites
 
@@ -14,12 +16,18 @@ Go is required to build this project. To install Go, refer to https://go.dev/doc
    ```
 2. Build executables (Run the following code in the root folder of this project)
    ```
-   go build
+   make build
    ```
-3. Run the new executable file
+3. Run the new executable file located in the bin folder (script will be added soon...)
 #### For Linux
    ```sh
-   ./tic3online_server
+   cd bin 
+   ```
+   in separate terminals, run 
+   ```sh
+   ./findgame_server
+   ./login_server
+   ./ws_server
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
