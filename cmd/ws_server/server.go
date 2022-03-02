@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -31,17 +32,22 @@ func findGameWrap(playerList PlayerList) func(http.ResponseWriter, *http.Request
 		if err != nil {
 			log.Fatal("dialing error:", err)
 		}
-		var gamestate structs.GameState
-		err = client.Call("FindGameServer.FindGame", username, &gamestate)
+		var gameMessage structs.GameMessage
+		err = client.Call("FindGameServer.FindGame", username, &gameMessage)
 		if err != nil {
 			log.Println("error finding game", err)
 
 		}
+		json.NewEncoder(w).Encode(gameMessage)
+		gameMessageJSON, err := json.Marshal(gameMessage)
+		if err != nil {
+			log.Println("error mashalling JSON", err)
 
+		}
 		for player := range playerList {
 			if player.Username == username {
 				select {
-				case player.Send <- fmt.Sprintf("hello, %v", player.Username):
+				case player.Send <- gameMessageJSON:
 				default:
 					close(player.Send)
 					delete(playerList, player)
@@ -51,23 +57,54 @@ func findGameWrap(playerList PlayerList) func(http.ResponseWriter, *http.Request
 	}
 }
 
+func registerRequest(w http.ResponseWriter, r *http.Request) {
+	//this should get the
+	// dummyResponse := `{"userId":"1"}`
+	// io.WriteString(w, dummyResponse)
+
+	fmt.Println(r.URL.Query())
+	params := r.URL.Query()
+	username := params["user"][0]
+
+	client, err := rpc.Dial("tcp", ":7070")
+	if err != nil {
+		log.Fatal("dialing error:", err)
+	}
+	defer client.Close()
+	var userid structs.UserID
+	err = client.Call("LoginServer.RegisterUsername", structs.Username(username), &userid)
+
+	if err != nil {
+		log.Println("error registering", err)
+
+	}
+	var registerSuccess bool
+	if userid == -1 {
+		registerSuccess = false
+	} else {
+		registerSuccess = true
+	}
+	json.NewEncoder(w).Encode(struct{ RegisteredSuccessfully bool }{RegisteredSuccessfully: registerSuccess})
+
+}
+
 func loginWrap(playerList PlayerList) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//this should get the
-		// dummyResponse := `{"userId":"1"}`
-		// io.WriteString(w, dummyResponse)
 
+		fmt.Println(r.URL.Query())
+		params := r.URL.Query()
+		username := params["user"][0]
 		client, err := rpc.Dial("tcp", ":7070")
 		if err != nil {
 			log.Fatal("dialing error:", err)
 		}
-		var username structs.Username = "Adam"
+		defer client.Close()
 		var userid structs.UserID
-		err = client.Call("LoginServer.GetIDbyUsername", username, &userid)
+		err = client.Call("LoginServer.GetIDbyUsername", structs.Username(username), &userid)
 		if err != nil {
 			log.Println("error logging in", err)
-
 		}
+		json.NewEncoder(w).Encode(struct{ Userid structs.UserID }{Userid: userid})
 	}
 }
 
@@ -130,8 +167,13 @@ func (playerList PlayerList) readFromPlayer(p *structs.Player) {
 }
 func (playerList PlayerList) writeToPlayer(p *structs.Player) {
 	for msg := range p.Send {
-		fmt.Println(msg)
-		err := p.WebSocketConnection.WriteMessage(1, []byte(fmt.Sprint(msg)))
+		gamemessageJSON, err := json.Marshal(msg)
+		if err != nil {
+			log.Println("write failed", err)
+			return
+		}
+		fmt.Println(string(gamemessageJSON))
+		err = p.WebSocketConnection.WriteMessage(1, gamemessageJSON)
 		if err != nil {
 			log.Println(err)
 		}
@@ -153,6 +195,7 @@ func main() {
 	myRouter.HandleFunc("/socket", webSocketConn)
 	myRouter.HandleFunc("/findGame", findGameRequest)
 	myRouter.HandleFunc("/login", loginRequest)
+	myRouter.HandleFunc("/register", registerRequest)
 
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 

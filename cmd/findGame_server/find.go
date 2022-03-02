@@ -11,10 +11,22 @@ import (
 
 type FindGameServer bool
 
-func (findgame *FindGameServer) FindGame(user structs.Username, state *structs.GameState) error {
-	*state = structs.GameState{
-		State:    "Searching",
-		Opponent: "NIL",
+func (findgame *FindGameServer) FindGame(user structs.Username, state *structs.GameMessage) error {
+	*state = structs.GameMessage{
+		State: "Finding",
+		GameInfo: structs.GameInfo{
+			GameID: 1,
+			Opponent: structs.Opponent{
+				Name: "",
+				ID:   -1,
+			},
+			Board: [][]string{
+				{"", "", ""},
+				{"", "", ""},
+				{"", "", ""},
+			},
+			IsTurn: false,
+		},
 	}
 	return nil
 }

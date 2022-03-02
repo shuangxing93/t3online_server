@@ -25,7 +25,23 @@ type UserID int
 
 //for findgame rpc
 //username as above
-type GameState struct {
-	State    string
-	Opponent string
+// type GameState struct {
+// 	State    string
+// 	Opponent string
+// }
+type Opponent struct {
+	Name string
+	ID   int
+}
+
+type GameInfo struct {
+	GameID int
+	Opponent
+	Board  [][]string
+	IsTurn bool
+}
+
+type GameMessage struct {
+	State string
+	GameInfo
 }
