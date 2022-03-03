@@ -47,14 +47,26 @@ func findGameWrap(playerList PlayerList) func(http.ResponseWriter, *http.Request
 		for player := range playerList {
 			if player.Username == username {
 				select {
-				case player.Send <- gameMessageJSON:
+				case player.SendGameMessage <- gameMessageJSON:
 				default:
-					close(player.Send)
+					close(player.SendGameMessage)
 					delete(playerList, player)
 				}
 			}
 		}
 	}
+}
+func queryURLAndReturnUser(r *http.Request) structs.LoginDetails {
+	fmt.Println(r.URL.Query())
+	params := r.URL.Query()
+	username := params["user"][0]
+	passwd := params["passwd"][0]
+
+	user := structs.LoginDetails{
+		Username: username,
+		Password: passwd,
+	}
+	return user
 }
 
 func registerRequest(w http.ResponseWriter, r *http.Request) {
@@ -62,17 +74,14 @@ func registerRequest(w http.ResponseWriter, r *http.Request) {
 	// dummyResponse := `{"userId":"1"}`
 	// io.WriteString(w, dummyResponse)
 
-	fmt.Println(r.URL.Query())
-	params := r.URL.Query()
-	username := params["user"][0]
-
+	user := queryURLAndReturnUser(r)
 	client, err := rpc.Dial("tcp", ":7070")
 	if err != nil {
 		log.Fatal("dialing error:", err)
 	}
 	defer client.Close()
 	var userid structs.UserID
-	err = client.Call("LoginServer.RegisterUsername", structs.Username(username), &userid)
+	err = client.Call("LoginServer.RegisterUsername", user, &userid)
 
 	if err != nil {
 		log.Println("error registering", err)
@@ -91,16 +100,15 @@ func registerRequest(w http.ResponseWriter, r *http.Request) {
 func loginWrap(playerList PlayerList) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		fmt.Println(r.URL.Query())
-		params := r.URL.Query()
-		username := params["user"][0]
+		user := queryURLAndReturnUser(r)
+
 		client, err := rpc.Dial("tcp", ":7070")
 		if err != nil {
 			log.Fatal("dialing error:", err)
 		}
 		defer client.Close()
 		var userid structs.UserID
-		err = client.Call("LoginServer.GetIDbyUsername", structs.Username(username), &userid)
+		err = client.Call("LoginServer.GetIDbyUsername", user, &userid)
 		if err != nil {
 			log.Println("error logging in", err)
 		}
@@ -120,7 +128,7 @@ func webSocketWrap(playerList PlayerList) func(http.ResponseWriter, *http.Reques
 
 		player := &structs.Player{
 			WebSocketConnection: ws,
-			Send:                make(chan interface{}),
+			SendGameMessage:     make(chan interface{}),
 			Username:            "",
 			UserID:              0,
 		}
@@ -146,7 +154,7 @@ func (playerList PlayerList) readFromPlayer(p *structs.Player) {
 		err := p.WebSocketConnection.ReadJSON(&msgReceived)
 		if err != nil {
 			log.Println("Player Disconnected, removing from player list")
-			close(p.Send)
+			close(p.SendGameMessage)
 			delete(playerList, p)
 			break
 		}
@@ -166,7 +174,7 @@ func (playerList PlayerList) readFromPlayer(p *structs.Player) {
 	}
 }
 func (playerList PlayerList) writeToPlayer(p *structs.Player) {
-	for msg := range p.Send {
+	for msg := range p.SendGameMessage {
 		gamemessageJSON, err := json.Marshal(msg)
 		if err != nil {
 			log.Println("write failed", err)

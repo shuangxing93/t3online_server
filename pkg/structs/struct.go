@@ -4,7 +4,7 @@ import "github.com/gorilla/websocket"
 
 type Player struct {
 	WebSocketConnection *websocket.Conn
-	Send                chan interface{}
+	SendGameMessage     chan interface{}
 	Username            string
 	UserID              int
 }
@@ -20,7 +20,10 @@ type WsMessage struct {
 }
 
 //for login rpc
-type Username string
+type LoginDetails struct {
+	Username string
+	Password string
+}
 type UserID int
 
 //for findgame rpc

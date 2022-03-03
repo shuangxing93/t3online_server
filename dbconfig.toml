@@ -1,0 +1,9 @@
+[database]
+SERVER_ADDRESS = ""
+DB_USER_TABLE = ""
+DB_GAME_TABLE = ""
+DB_PASS = ""
+DB_DRIVER = "mysql"
+
+[output]
+format = "toml"

@@ -1,17 +1,25 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net"
 	"net/rpc"
 
+	"github.com/shuangxing93/tic3online_server/pkg/database"
 	structs "github.com/shuangxing93/tic3online_server/pkg/structs"
 )
 
 type FindGameServer bool
 
-func (findgame *FindGameServer) FindGame(user structs.Username, state *structs.GameMessage) error {
+func (findgame *FindGameServer) FindGame(user structs.UserID, state *structs.GameMessage) error {
+
+	db := database.ConnectToDatabase()
+	defer db.Close()
+
+	// TODO: find user that is also currently searching. If nil, change our status to searching
+
 	*state = structs.GameMessage{
 		State: "Finding",
 		GameInfo: structs.GameInfo{
@@ -29,6 +37,18 @@ func (findgame *FindGameServer) FindGame(user structs.Username, state *structs.G
 		},
 	}
 	return nil
+}
+
+func getSearchingOpponent(db *sql.DB, userID structs.UserID) int {
+	var opponentID int
+	err := db.QueryRow("SELECT FROM game_state userID WHERE current_state = (?)", "Searching").Scan(&opponentID)
+
+	if err != nil {
+		fmt.Println("No opponent to be found...")
+		return -1
+	}
+	//Opponent found
+	err := db.Prepare("UPDATE ")
 }
 
 func main() {
